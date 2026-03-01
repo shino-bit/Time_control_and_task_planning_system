@@ -43,8 +43,15 @@ namespace WpfApp1.Models
         public int TimeSpentSeconds
         {
             get => _timeSpentSeconds;
-            set { _timeSpentSeconds = value; OnPropertyChanged(); }
+            set
+            {
+                _timeSpentSeconds = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(FormattedTime));
+            }
         }
+
+        public string FormattedTime => TimeSpan.FromSeconds(TimeSpentSeconds).ToString(@"hh\:mm\:ss");
 
         public event PropertyChangedEventHandler PropertyChanged;
         protected void OnPropertyChanged([CallerMemberName] string name = null)
