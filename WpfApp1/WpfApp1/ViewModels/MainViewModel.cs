@@ -16,19 +16,27 @@ namespace WpfApp1.ViewModels
     {
         private readonly JsonDataService _dataService;
         private string _newTaskTitle = string.Empty;
+        private string _selectedCategory;
         private TaskItem _selectedTask;
-        
+
         private DispatcherTimer _timer;
         private bool _isTimerRunning;
         private string _currentFilter = "All";
 
         public ObservableCollection<TaskItem> Tasks { get; set; }
-        public ICollectionView TasksView { get; } 
+        public ObservableCollection<string> Categories { get; set; } 
+        public ICollectionView TasksView { get; }
 
         public string NewTaskTitle
         {
             get => _newTaskTitle;
             set { _newTaskTitle = value; OnPropertyChanged(); }
+        }
+
+        public string SelectedCategory
+        {
+            get => _selectedCategory;
+            set { _selectedCategory = value; OnPropertyChanged(); }
         }
 
         public TaskItem SelectedTask
@@ -60,8 +68,12 @@ namespace WpfApp1.ViewModels
             var loadedTasks = _dataService.LoadTasks();
             Tasks = new ObservableCollection<TaskItem>(loadedTasks);
 
+            Categories = new ObservableCollection<string> { "Загальне", "Навчання", "Робота", "Особисте" };
+            SelectedCategory = Categories.First(); 
+
             TasksView = CollectionViewSource.GetDefaultView(Tasks);
             TasksView.Filter = FilterTasksCondition;
+            TasksView.GroupDescriptions.Add(new PropertyGroupDescription("Category"));
 
             Tasks.CollectionChanged += Tasks_CollectionChanged;
             foreach (var task in Tasks) task.PropertyChanged += Task_PropertyChanged;
@@ -95,7 +107,7 @@ namespace WpfApp1.ViewModels
             if (parameter is string filter)
             {
                 _currentFilter = filter;
-                TasksView.Refresh(); 
+                TasksView.Refresh();
             }
         }
 
@@ -119,17 +131,16 @@ namespace WpfApp1.ViewModels
         private void Task_PropertyChanged(object sender, PropertyChangedEventArgs e)
         {
             if (e.PropertyName == nameof(TaskItem.TimeSpentSeconds) && IsTimerRunning) return;
-
             if (e.PropertyName == nameof(TaskItem.IsCompleted)) TasksView.Refresh();
-            
             SaveData();
         }
 
         private bool CanAddTask(object parameter) => !string.IsNullOrWhiteSpace(NewTaskTitle);
+
         private void AddTask(object parameter)
         {
-            Tasks.Add(new TaskItem { Title = NewTaskTitle });
-            NewTaskTitle = string.Empty; 
+            Tasks.Add(new TaskItem { Title = NewTaskTitle, Category = SelectedCategory });
+            NewTaskTitle = string.Empty;
         }
 
         private bool CanDeleteTask(object parameter) => SelectedTask != null;
