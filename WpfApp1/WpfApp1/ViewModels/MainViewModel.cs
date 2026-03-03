@@ -17,15 +17,40 @@ namespace WpfApp1.ViewModels
         private readonly JsonDataService _dataService;
         private string _newTaskTitle = string.Empty;
         private string _selectedCategory;
+        private DateTime? _newTaskDeadline = DateTime.Today;
         private TaskItem _selectedTask;
 
         private DispatcherTimer _timer;
         private bool _isTimerRunning;
         private string _currentFilter = "All";
 
+        // Поля статистики
+        private int _totalTasksCount;
+        private int _completedTasksCount;
+        private string _totalTimeSpent = "00:00:00";
+
         public ObservableCollection<TaskItem> Tasks { get; set; }
-        public ObservableCollection<string> Categories { get; set; } 
+        public ObservableCollection<string> Categories { get; set; }
         public ICollectionView TasksView { get; }
+
+        // Властивості для статистики
+        public int TotalTasksCount
+        {
+            get => _totalTasksCount;
+            set { _totalTasksCount = value; OnPropertyChanged(); }
+        }
+
+        public int CompletedTasksCount
+        {
+            get => _completedTasksCount;
+            set { _completedTasksCount = value; OnPropertyChanged(); }
+        }
+
+        public string TotalTimeSpent
+        {
+            get => _totalTimeSpent;
+            set { _totalTimeSpent = value; OnPropertyChanged(); }
+        }
 
         public string NewTaskTitle
         {
@@ -37,6 +62,12 @@ namespace WpfApp1.ViewModels
         {
             get => _selectedCategory;
             set { _selectedCategory = value; OnPropertyChanged(); }
+        }
+
+        public DateTime? NewTaskDeadline
+        {
+            get => _newTaskDeadline;
+            set { _newTaskDeadline = value; OnPropertyChanged(); }
         }
 
         public TaskItem SelectedTask
@@ -61,6 +92,7 @@ namespace WpfApp1.ViewModels
         public ICommand StartTimerCommand { get; }
         public ICommand StopTimerCommand { get; }
         public ICommand FilterCommand { get; }
+        public ICommand SortCommand { get; }
 
         public MainViewModel()
         {
@@ -69,14 +101,20 @@ namespace WpfApp1.ViewModels
             Tasks = new ObservableCollection<TaskItem>(loadedTasks);
 
             Categories = new ObservableCollection<string> { "Загальне", "Навчання", "Робота", "Особисте" };
-            SelectedCategory = Categories.First(); 
+            SelectedCategory = Categories.First();
 
             TasksView = CollectionViewSource.GetDefaultView(Tasks);
             TasksView.Filter = FilterTasksCondition;
             TasksView.GroupDescriptions.Add(new PropertyGroupDescription("Category"));
 
+            // Сортування за терміновістю
+            TasksView.SortDescriptions.Add(new SortDescription("IsCompleted", ListSortDirection.Ascending));
+            TasksView.SortDescriptions.Add(new SortDescription("Deadline", ListSortDirection.Ascending));
+
             Tasks.CollectionChanged += Tasks_CollectionChanged;
             foreach (var task in Tasks) task.PropertyChanged += Task_PropertyChanged;
+
+            UpdateStatistics();
 
             _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _timer.Tick += Timer_Tick;
@@ -86,6 +124,37 @@ namespace WpfApp1.ViewModels
             StartTimerCommand = new RelayCommand(StartTimer, CanStartTimer);
             StopTimerCommand = new RelayCommand(StopTimer, CanStopTimer);
             FilterCommand = new RelayCommand(ChangeFilter);
+            SortCommand = new RelayCommand(ApplySort);
+        }
+
+        private void UpdateStatistics()
+        {
+            TotalTasksCount = Tasks.Count;
+            CompletedTasksCount = Tasks.Count(t => t.IsCompleted);
+
+            long totalSeconds = Tasks.Sum(t => t.TimeSpentSeconds);
+            TotalTimeSpent = TimeSpan.FromSeconds(totalSeconds).ToString(@"hh\:mm\:ss");
+        }
+
+        // Метод сортування
+        private void ApplySort(object parameter)
+        {
+            TasksView.SortDescriptions.Clear();
+
+            if (parameter is string sortType && sortType == "Urgency")
+            {
+
+                TasksView.SortDescriptions.Add(new SortDescription("IsCompleted", ListSortDirection.Ascending));
+                TasksView.SortDescriptions.Add(new SortDescription("Deadline", ListSortDirection.Ascending));
+            }
+            else
+            {
+
+                TasksView.SortDescriptions.Add(new SortDescription("Category", ListSortDirection.Ascending));
+                TasksView.SortDescriptions.Add(new SortDescription("Title", ListSortDirection.Ascending));
+            }
+
+            TasksView.Refresh();
         }
 
         private bool FilterTasksCondition(object obj)
@@ -113,7 +182,11 @@ namespace WpfApp1.ViewModels
 
         private void Timer_Tick(object sender, EventArgs e)
         {
-            if (SelectedTask != null) SelectedTask.TimeSpentSeconds++;
+            if (SelectedTask != null)
+            {
+                SelectedTask.TimeSpentSeconds++;
+                UpdateStatistics();
+            }
         }
 
         private bool CanStartTimer(object parameter) => SelectedTask != null && !IsTimerRunning;
@@ -126,12 +199,25 @@ namespace WpfApp1.ViewModels
         {
             if (e.NewItems != null) foreach (TaskItem item in e.NewItems) item.PropertyChanged += Task_PropertyChanged;
             if (e.OldItems != null) foreach (TaskItem item in e.OldItems) item.PropertyChanged -= Task_PropertyChanged;
+
+            UpdateStatistics();
+            SaveData();
         }
 
         private void Task_PropertyChanged(object sender, PropertyChangedEventArgs e)
         {
-            if (e.PropertyName == nameof(TaskItem.TimeSpentSeconds) && IsTimerRunning) return;
+            if (e.PropertyName == nameof(TaskItem.TimeSpentSeconds) && IsTimerRunning)
+            {
+                return;
+            }
+
+            if (e.PropertyName == nameof(TaskItem.IsCompleted) || e.PropertyName == nameof(TaskItem.TimeSpentSeconds))
+            {
+                UpdateStatistics();
+            }
+
             if (e.PropertyName == nameof(TaskItem.IsCompleted)) TasksView.Refresh();
+
             SaveData();
         }
 
@@ -139,8 +225,14 @@ namespace WpfApp1.ViewModels
 
         private void AddTask(object parameter)
         {
-            Tasks.Add(new TaskItem { Title = NewTaskTitle, Category = SelectedCategory });
+            Tasks.Add(new TaskItem
+            {
+                Title = NewTaskTitle,
+                Category = SelectedCategory,
+                Deadline = NewTaskDeadline
+            });
             NewTaskTitle = string.Empty;
+            NewTaskDeadline = DateTime.Today;
         }
 
         private bool CanDeleteTask(object parameter) => SelectedTask != null;

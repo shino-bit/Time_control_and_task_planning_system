@@ -7,10 +7,10 @@ namespace WpfApp1.Models
     public class TaskItem : INotifyPropertyChanged
     {
         private string _title = string.Empty;
-        private string _description = string.Empty;
         private string _category = "Загальне";
         private bool _isCompleted = false;
         private int _timeSpentSeconds = 0;
+        private DateTime? _deadline; 
 
         public string Id { get; set; } = Guid.NewGuid().ToString();
 
@@ -18,12 +18,6 @@ namespace WpfApp1.Models
         {
             get => _title;
             set { _title = value; OnPropertyChanged(); }
-        }
-
-        public string Description
-        {
-            get => _description;
-            set { _description = value; OnPropertyChanged(); }
         }
 
         public string Category
@@ -35,8 +29,26 @@ namespace WpfApp1.Models
         public bool IsCompleted
         {
             get => _isCompleted;
-            set { _isCompleted = value; OnPropertyChanged(); }
+            set
+            {
+                _isCompleted = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(IsOverdue)); 
+            }
         }
+
+        public DateTime? Deadline
+        {
+            get => _deadline;
+            set
+            {
+                _deadline = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(IsOverdue));
+            }
+        }
+
+        public bool IsOverdue => Deadline.HasValue && Deadline.Value.Date < DateTime.Now.Date && !IsCompleted;
 
         public DateTime CreatedAt { get; set; } = DateTime.Now;
 
